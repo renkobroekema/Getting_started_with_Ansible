@@ -1,4 +1,3 @@
 # Gettitng_started_with_Ansible
-https://www.youtube.com/playlist?list=PLT98CRl2KxKEUHie1m24-wkyHpEsa4Y70
-
-by Learn Linux TV
+https://www.youtube.com/results?search_query=ansible+learn+linux+tv
+Youtube-course with instructor with Jay LaCroix 18 videos
