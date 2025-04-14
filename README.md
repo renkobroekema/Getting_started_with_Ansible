@@ -1,3 +1,4 @@
-# ansible_linux.tv
+# Gettitng_started_with_Ansible
+https://www.youtube.com/playlist?list=PLT98CRl2KxKEUHie1m24-wkyHpEsa4Y70
 
-My first git-repository @ GitHub
+by Learn Linux TV
