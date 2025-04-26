@@ -1,0 +1,12 @@
+---
+- name: "Ensure system boots to multi-user.target"
+  hosts: vms-rockylinux
+  tasks:
+
+  - name: "Check current default systemd target"
+    ansible.builtin.command: systemctl get-default
+    register: current_target
+
+  - name: "Set systemd default target to multi-user.target if not already set"
+    ansible.builtin.command: systemctl set-default multi-user.target
+    when: current_target.stdout != "multi-user.target"
