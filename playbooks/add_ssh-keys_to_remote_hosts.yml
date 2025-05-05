@@ -1,0 +1,19 @@
+---
+- name: "Add SSH keys to remote-hosts"
+  hosts: vps-linux
+  tasks:
+  
+    - name: "Add SSH key for user 'beheerder'"
+      ansible.posix.authorized_key:
+        user: beheerder
+        state: present
+        key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAkqexn9f86hsYQ0MZ6XiPcKTn9k0VindrX2lumixgUB beheerder@workstation"
+
+    - name: "Add SSH key for user 'renko'"
+      ansible.posix.authorized_key:
+        user: renko
+        state: present
+        key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE9Ef6RfUjay8juWE9wt7mGpUP7EwwyzR+EnOSI9DXk2 renko@workstation"        
+        
+
+

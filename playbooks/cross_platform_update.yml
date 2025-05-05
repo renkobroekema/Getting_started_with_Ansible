@@ -1,0 +1,78 @@
+---
+- name: "Update, Upgrade, and Reboot Systems if Needed"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    # Debian
+    - name: "Update and upgrade packages on Debian-based systems"
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: full
+        autoremove: yes
+      when: ansible_facts['os_family'] == "Debian"
+
+    # RHEL
+    - name: "Update all packages on RHEL-based systems (using DNF)"
+      ansible.builtin.dnf:
+        name: '*'
+        state: latest
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: "Autoremove packages on RHEL-based systems"
+      ansible.builtin.dnf:
+        autoremove: yes
+      when: ansible_facts['os_family'] == "RedHat"
+
+    # FreeBSD
+    - name: "Update pkg repository on FreeBSD"
+      community.general.pkgng:
+        update_cache: yes
+      when: ansible_facts['os_family'] == "FreeBSD"
+
+    - name: "Upgrade all packages on FreeBSD"
+      ansible.builtin.command: pkg upgrade -y
+      register: freebsd_upgrade
+      changed_when: "'Upgrading' in freebsd_upgrade.stdout"
+      when: ansible_facts['os_family'] == "FreeBSD"
+
+    # Reboot checks
+
+    - name: "Check if reboot is required on Debian"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_file
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "Check if reboot is required on RHEL"
+      ansible.builtin.command: needs-restarting -r
+      register: reboot_check
+      failed_when: false
+      changed_when: false
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: "Set reboot_required fact on Debian"
+      set_fact:
+        reboot_required: "{{ reboot_file.stat.exists }}"
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: "Set reboot_required fact on RHEL"
+      set_fact:
+        reboot_required: "{{ reboot_check.rc == 1 }}"
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: "Set reboot_required fact on FreeBSD (assume reboot if packages upgraded)"
+      set_fact:
+        reboot_required: "{{ 'Upgrading' in freebsd_upgrade.stdout }}"
+      when: ansible_facts['os_family'] == "FreeBSD"
+
+    - name: "Reboot system if required"
+      ansible.builtin.reboot:
+        msg: "Rebooting after system updates"
+        pre_reboot_delay: 10
+        reboot_timeout: 600
+        test_command: whoami
+      when: reboot_required | default(false)
+

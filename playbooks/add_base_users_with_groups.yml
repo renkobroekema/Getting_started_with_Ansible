@@ -1,0 +1,46 @@
+---
+- name: Create users with admin privileges by OS family
+  hosts: vps-linux
+  become: true
+  vars:
+    base_home: "/home"
+
+    users:
+      - name: beheerder
+        uid: 1000
+      - name: rbroekema
+        uid: 1001
+      - name: renko
+        uid: 1002
+
+  tasks:
+    - name: Set admin group based on OS family
+      set_fact:
+        admin_group: "{{ 'sudo' if ansible_facts.os_family == 'Debian' else 'wheel' }}"
+
+    - name: Ensure admin group exists
+      ansible.builtin.group:
+        name: "{{ admin_group }}"
+        state: present
+
+    - name: Ensure users are present and in admin group
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        uid: "{{ item.uid }}"
+        home: "{{ base_home }}/{{ item.name }}"
+        groups: "{{ admin_group }}"
+        append: yes
+        state: present
+        create_home: yes
+        shell: /bin/bash
+      loop: "{{ users }}"
+           
+    - name: Add passwordless sudo for users via /etc/sudoers.d
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ item.name }}"
+        content: "{{ item.name }} ALL=(ALL) NOPASSWD:ALL"
+        owner: root
+        group: root
+        mode: '0440'
+        validate: '/usr/sbin/visudo -cf %s'
+      loop: "{{ users }}"
