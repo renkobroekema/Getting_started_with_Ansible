@@ -1,0 +1,59 @@
+## 01 - clean disks
+- name: "Get clean unmounted full disks with no partitions or filesystem"
+  hosts: vms-oradb01
+  become: true
+  tasks:
+
+    - name: "Run lsblk with JSON output"
+      ansible.builtin.command: lsblk -J -o NAME,TYPE,MOUNTPOINT,SIZE
+      register: lsblk_raw
+
+    - name: "Parse lsblk JSON output"
+      ansible.builtin.set_fact:
+        lsblk_data: "{{ lsblk_raw.stdout | from_json }}"
+
+    - name: "Get candidate disks - full, unmounted, no partitions"
+      ansible.builtin.set_fact:
+        candidate_disks: >-
+          {{
+            lsblk_data.blockdevices
+            | selectattr('type', 'equalto', 'disk')
+            | selectattr('mountpoint', 'equalto', None)
+            | rejectattr('children', 'defined')
+            | list
+          }}
+
+    - name: "Check for filesystem on candidate disks"
+      ansible.builtin.shell: |
+        lsblk -no FSTYPE /dev/{{ item.name }}
+      register: fstype_check
+      changed_when: false
+      loop: "{{ candidate_disks }}"
+      loop_control:
+        label: "/dev/{{ item.name }}"
+
+    - name: "Filter disks with no filesystem"
+      ansible.builtin.set_fact:
+        clean_disks: >-
+          {{
+            candidate_disks
+            | zip(fstype_check.results)
+            | selectattr('1.stdout', 'equalto', '')
+            | map(attribute='0')
+            | list
+          }}
+
+    - name: "Show clean, unmounted full disks"
+      ansible.builtin.debug:
+        msg: "/dev/{{ item.name }} ({{ item.size }}) is clean (no mount, no partitions, no FS)"
+      loop: "{{ clean_disks }}"
+      
+    - name: "Write clean, unmounted disk info to a log file"
+      ansible.builtin.lineinfile:
+        path: "/tmp/detect_used_block_devices.log"
+        line: "/dev/{{ item.name }} ({{ item.size }}) is clean (no mount, no partitions, no FS)"
+        create: yes
+        insertafter: EOF
+      loop: "{{ clean_disks }}"
+
+

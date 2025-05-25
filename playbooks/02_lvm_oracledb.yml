@@ -1,0 +1,94 @@
+## 02 - create pv and vg
+---
+- name: "Read block device list from a file on the remote host"
+  hosts: vms-oradb01
+  become: true
+  gather_facts: false
+
+  vars:
+    remote_device_file: /tmp/detect_used_block_devices.log
+
+  tasks:
+
+    - name: "Read the remote block device file"
+      ansible.builtin.slurp:
+        src: "{{ remote_device_file }}"
+      register: raw_device_file
+
+    - name: "Extract all block devices from the file content"
+      ansible.builtin.set_fact:
+        devices: >-
+          {{
+            raw_device_file.content
+            | b64decode
+            | regex_findall('(/dev/[a-zA-Z0-9]+)')
+            | unique
+          }}
+
+    - name: "Debug extracted device list"
+      ansible.builtin.debug:
+        var: devices
+
+    - name: "Check if each device is already a physical volume"
+      ansible.builtin.command: >
+        pvs --noheadings -o pv_name,vg_name {{ item }} 2>/dev/null
+      loop: "{{ devices }}"
+      register: pvs_check
+      changed_when: false
+      failed_when: false
+
+    - name: "Create physical volume only if not already part of a volume group"
+      ansible.builtin.command: >
+        pvcreate -ff -y {{ item }}
+      loop: "{{ devices }}"
+      when: >
+        pvs_check.results[loop.index0].rc != 0
+        or (pvs_check.results[loop.index0].stdout is defined and
+        pvs_check.results[loop.index0].stdout | trim == "")
+
+      register: pvcreate_results
+
+    - name: "Debug PV create results"
+      ansible.builtin.debug:
+        var: pvcreate_results
+
+
+
+
+
+    - name: "Run pvcreate on each extracted block device"
+      ansible.builtin.command:
+        cmd: pvcreate {{ item }}
+      loop: "{{ devices }}"
+      register: pvcreate_results
+      ignore_errors: false  
+
+    - name: "Show pvcreate results"
+      ansible.builtin.debug:
+        var: pvcreate_results
+
+    - name: "Create volume group vg_oracle"
+      ansible.builtin.command:
+        cmd: vgcreate vg_oracle {{ devices | join(' ') }}
+      register: vgcreate_result
+      ignore_errors: false 
+
+    - name: "Show vgcreate result"
+      ansible.builtin.debug:
+        var: vgcreate_result
+        
+    - name: "Create 4 equal-sized LVs (24.60G each) in vg_oracle"
+      ansible.builtin.command: >
+        lvcreate -y -L 24.60G -n {{ item }} vg_oracle
+      loop:
+        - lv_u01
+        - lv_u02
+        - lv_u03
+        - lv_u04
+      register: lvcreate_results
+
+    - name: "Show lvcreate results"
+      ansible.builtin.debug:
+        var: lvcreate_results
+    
+

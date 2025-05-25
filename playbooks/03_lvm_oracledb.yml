@@ -1,0 +1,45 @@
+## 03 - create lv and mountpoints
+---
+- name: "Read block device list from a file on the remote host"
+  hosts: vms-oradb01
+  become: true
+  gather_facts: false
+  
+  tasks:
+  
+    - name: "Create 4 equal-sized LVs (24.60G each) in vg_oracle"
+      ansible.builtin.command: >
+        lvcreate -y -L 24.60G -n {{ item }} vg_oracle
+      loop:
+        - lv_u01
+        - lv_u02
+        - lv_u03
+        - lv_u04
+      register: lvcreate_results
+
+    - name: "Show lvcreate results"
+      ansible.builtin.debug:
+        var: lvcreate_results
+        
+    - name: "Create mount points"
+      ansible.builtin.file:
+        path: "/u0{{ item }}"
+        state: directory
+        mode: '0755'
+      loop: [1, 2, 3, 4]
+
+    - name: "Format logical volumes with XFS"
+      ansible.builtin.filesystem:
+        fstype: xfs
+        dev: "/dev/vg_oracle/lv_u0{{ item }}"
+      loop: [1, 2, 3, 4]
+
+    - name: "Mount logical volumes"
+      ansible.builtin.mount:
+        path: "/u0{{ item }}"
+        src: "/dev/vg_oracle/lv_u0{{ item }}"
+        fstype: xfs
+        opts: defaults
+        state: mounted
+      loop: [1, 2, 3, 4]
+        
